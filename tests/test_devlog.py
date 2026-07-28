@@ -484,3 +484,34 @@ class TestRegressions(unittest.TestCase):
         self.assertIn("详细说明第二行", c["body"])
         self.assertNotIn("insertion", c["body"], "统计行不应混进 body")
         self.assertEqual(c["insertions"], 1)
+
+    @unittest.skipUnless(gitlink.git_available(), "系统无 git")
+    def test_reads_commits_from_all_branches(self):
+        """停在 main 分支时，功能分支上的提交也必须能读到。"""
+        repo = tempfile.mkdtemp(prefix="devlog-branch-")
+        env = {**os.environ, "GIT_AUTHOR_NAME": "T", "GIT_AUTHOR_EMAIL": "t@e.com",
+               "GIT_COMMITTER_NAME": "T", "GIT_COMMITTER_EMAIL": "t@e.com"}
+        g = lambda *a: subprocess.run(["git", "-C", repo, *a], check=True, env=env,
+                                      capture_output=True)
+        subprocess.run(["git", "init", "-q", repo], check=True, env=env)
+        Path(repo, "a.txt").write_text("a\n")
+        g("add", "."); g("commit", "-q", "-m", "主干提交")
+        g("checkout", "-q", "-b", "feat/x")
+        Path(repo, "b.txt").write_text("b\n")
+        g("add", "."); g("commit", "-q", "-m", "功能分支提交")
+        g("checkout", "-q", "-")   # 回到主干
+
+        subjects = [c["subject"] for c in gitlink.read_commits(repo)]
+        self.assertIn("功能分支提交", subjects, "必须能读到其他分支的提交")
+        self.assertIn("主干提交", subjects)
+
+        byname = {c["subject"]: c for c in gitlink.read_commits(repo)}
+        self.assertEqual(byname["功能分支提交"]["branch"], "feat/x",
+                         "分支名应逐条判断，而不是统一用 HEAD")
+
+    def test_pick_branch_from_refs(self):
+        self.assertEqual(gitlink._pick_branch("HEAD -> main, origin/main", "x"), "main")
+        self.assertEqual(gitlink._pick_branch("feat/pay", "x"), "feat/pay")
+        self.assertEqual(gitlink._pick_branch("tag: v1.0", "fallback"), "fallback")
+        self.assertEqual(gitlink._pick_branch("", "fallback"), "fallback")
+        self.assertEqual(gitlink._pick_branch("origin/main", "fallback"), "fallback")

@@ -180,15 +180,22 @@
       <section class="page" id="page-git">
         <div class="card">
           <h3>🌿 本地仓库</h3>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+            把你写的代码提交自动认领到对应任务上，生成日报时就能列出「这个任务今天写了哪些代码」。
+            填入项目文件夹路径（就是含 <code>.git</code> 的那个目录），点同步即可。
+          </p>
           <div class="row wrap">
-            <input type="text" id="git-repo" placeholder="/path/to/your/repo" style="flex:1;min-width:240px">
+            <input type="text" id="git-repo" placeholder="例如 D:\projects\myapp 或 /Users/你/code/myapp" style="flex:1;min-width:240px">
             <button class="btn primary" id="git-sync">同步提交</button>
           </div>
           <div id="git-status" style="margin-top:10px"></div>
-          <p style="font-size:11px;color:var(--dim);margin-top:8px">
-            提交信息里写 <code>#任务ID</code>（如 <code>fix login #3</code>）会自动关联任务；
-            也支持按分支名和标题关键词自动匹配。
-          </p>
+          <div class="hint" style="margin-top:10px">
+            <b>三种自动认领方式</b>（满足任意一种即可）：<br>
+            1️⃣ 提交信息里写 <code>#任务编号</code>，如 <code>fix: 修复登录 #3</code> ← 最准，推荐<br>
+            2️⃣ 任务里填了「关联分支」，该分支上的提交自动归它<br>
+            3️⃣ 提交信息和任务标题关键词重合度高时自动猜<br>
+            <span style="color:var(--dim)">没认领上的提交也会记录，只是不挂在任务下。</span>
+          </div>
         </div>
         <div class="card">
           <h3>📦 提交记录</h3>

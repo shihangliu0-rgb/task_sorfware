@@ -81,18 +81,25 @@ STAT_RE = re.compile(
 )
 
 
-def read_commits(repo: str, limit: int = 60, since: str | None = None) -> list[dict]:
+def read_commits(repo: str, limit: int = 60, since: str | None = None,
+                 all_branches: bool = True) -> list[dict]:
     """读取提交历史（含改动行数统计）。
 
-    注意：--shortstat 的统计行输出在每条记录的**后面**，所以记录分隔符
+    注意 1：--shortstat 的统计行输出在每条记录的**后面**，所以记录分隔符
     必须放在格式串开头，才能让统计行落进本条记录的 chunk 里。
+
+    注意 2：默认带 --all 读取所有分支。否则停在 main 分支时，
+    功能分支上的提交会全部读不到（这才是日常最需要记录的部分）。
+    每条提交单独回查它所属的分支，而不是统一用 HEAD 的分支名。
     """
-    fmt = REC + SEP.join(["%H", "%an", "%at", "%s", "%b"])
+    fmt = REC + SEP.join(["%H", "%an", "%at", "%s", "%D", "%b"])
     args = ["log", f"--max-count={limit}", f"--pretty=format:{fmt}", "--shortstat"]
+    if all_branches:
+        args.append("--all")
     if since:
         args.append(f"--since={since}")
     raw = _run(repo, args)
-    branch = current_branch(repo)
+    head_branch = current_branch(repo)
     name = Path(repo).expanduser().resolve().name
 
     commits: list[dict] = []
@@ -100,11 +107,12 @@ def read_commits(repo: str, limit: int = 60, since: str | None = None) -> list[d
         if not chunk.strip():
             continue
         parts = chunk.split(SEP)
-        if len(parts) < 5:
+        if len(parts) < 6:
             continue
         sha, author, ts = parts[0].strip(), parts[1], parts[2]
         subject = parts[3]
-        rest = parts[4]  # body（可能多行）+ 末尾的 shortstat 行
+        refs = parts[4]          # %D：HEAD -> main, origin/main, feat/xxx
+        rest = parts[5]          # body（可能多行）+ 末尾的 shortstat 行
 
         files = insertions = deletions = 0
         body_lines: list[str] = []
@@ -125,10 +133,28 @@ def read_commits(repo: str, limit: int = 60, since: str | None = None) -> list[d
             "sha": sha, "repo": name, "author": author, "ts": ts_int,
             "subject": subject.strip(),
             "body": "\n".join(body_lines).strip()[:2000],
-            "branch": branch, "files": files,
+            "branch": _pick_branch(refs, head_branch), "files": files,
             "insertions": insertions, "deletions": deletions,
         })
     return commits
+
+
+def _pick_branch(refs: str, fallback: str) -> str:
+    """从 %D 的 ref 列表里挑出最合适的分支名。
+
+    形如 "HEAD -> main, origin/main, tag: v1.0"，优先本地分支，
+    跳过 tag 和 remote 前缀；没有 ref 的中间提交回退到 HEAD 分支。
+    """
+    for raw in (refs or "").split(","):
+        ref = raw.strip()
+        if not ref or ref.startswith("tag:"):
+            continue
+        if "->" in ref:                      # "HEAD -> main"
+            return ref.split("->")[-1].strip()
+        if ref == "HEAD" or ref.startswith("origin/"):
+            continue
+        return ref
+    return fallback
 
 
 STOP = {
