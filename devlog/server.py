@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import analyzer, gitlink, summarizer
-from .db import Store, attachments_dir, now
+from .db import Store, attachments_dir, data_home, now
 
 WEB_DIR = Path(__file__).parent / "web"
 MAX_UPLOAD = 12 * 1024 * 1024  # 单张图片上限 12MB
@@ -145,6 +145,7 @@ class Handler(BaseHTTPRequestHandler):
                 "logs": s.recent_logs(limit=200),
                 "settings": {
                     "git_repo": repo,
+                    "data_home": str(data_home()),
                     "ai_model": s.get_setting("ai_model", "gpt-4o-mini"),
                     "ai_base_url": s.get_setting("ai_base_url", "https://api.openai.com/v1"),
                     "has_key": bool(s.get_setting("ai_api_key", "")),
@@ -361,7 +362,9 @@ class Handler(BaseHTTPRequestHandler):
         # ---- 设置 ----
         if path == "/api/settings":
             for k, v in (b or {}).items():
-                if k in {"git_repo", "ai_api_key", "ai_model", "ai_base_url"}:
+                if k == "git_repo" and v:
+                    s.set_setting(k, gitlink.normalize_repo_path(str(v)))
+                elif k in {"ai_api_key", "ai_model", "ai_base_url"}:
                     s.set_setting(k, v)
             return self.json({"ok": True})
 

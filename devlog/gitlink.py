@@ -36,8 +36,42 @@ def _run(repo: str, args: list[str], timeout: int = 15) -> str:
     return proc.stdout
 
 
+def normalize_repo_path(path: str) -> str:
+    """把用户填的各种路径纠正成仓库根目录。
+
+    常见填法都要能兼容：
+      D:\\code\\myapp\\.git   → 多填了一层 .git（最常见）
+      D:\\code\\myapp\\src    → 填了子目录
+      "D:\\code\\myapp"       → 从资源管理器复制带引号
+    """
+    raw = (path or "").strip().strip('"').strip("'")
+    if not raw:
+        return raw
+    p = Path(raw).expanduser()
+
+    # 多填了一层 .git
+    if p.name == ".git":
+        p = p.parent
+
+    if not p.exists():
+        return str(p)
+
+    # 填的是文件就取所在目录
+    if p.is_file():
+        p = p.parent
+
+    # 填了子目录：交给 git 自己找根目录
+    try:
+        top = _run(str(p), ["rev-parse", "--show-toplevel"]).strip()
+        if top:
+            return str(Path(top))
+    except Exception:  # noqa: BLE001
+        pass
+    return str(p)
+
+
 def is_repo(path: str) -> bool:
-    p = Path(path).expanduser()
+    p = Path(normalize_repo_path(path)).expanduser()
     if not p.is_dir():
         return False
     try:
@@ -55,6 +89,7 @@ def current_branch(repo: str) -> str:
 
 def status_summary(repo: str) -> dict:
     """当前工作区状态：分支、改动文件数、是否干净。"""
+    repo = normalize_repo_path(repo)
     try:
         porcelain = _run(repo, ["status", "--porcelain"])
     except Exception as exc:
@@ -202,13 +237,33 @@ def match_task(commit: dict, tasks: list[dict]) -> int | None:
     return best if best_score >= 0.5 else None
 
 
+def explain_bad_path(raw: str) -> str:
+    """路径不对时，给一句能直接照做的提示，而不是干巴巴报错。"""
+    p = Path((raw or "").strip().strip('"').strip("'")).expanduser()
+    if not raw.strip():
+        return "请先填写项目文件夹路径"
+    if not p.exists():
+        return f"这个路径不存在：{p}　请检查是否拼写有误"
+    if p.is_file():
+        return f"这是一个文件，不是文件夹。请填它所在的项目目录：{p.parent}"
+
+    # 往上找找，是不是填了某个仓库的子目录
+    for parent in [p, *p.parents]:
+        if (parent / ".git").exists():
+            return (f"这个目录本身不是仓库根目录。"
+                    f"请改填：{parent}")
+    return (f"{p} 不是一个 git 仓库（里面没有 .git 文件夹）。"
+            f"请填你项目的根目录，也就是能看到 .git 的那一层")
+
+
 def sync(store, repo: str, limit: int = 60) -> dict:
     """拉取提交并写库，返回同步结果。"""
-    repo = str(Path(repo).expanduser())
     if not git_available():
-        return {"ok": False, "error": "系统里没有找到 git 命令"}
+        return {"ok": False, "error": "系统里没有找到 git 命令，请先安装 Git"}
+    original = repo
+    repo = normalize_repo_path(repo)
     if not is_repo(repo):
-        return {"ok": False, "error": f"不是一个 git 仓库：{repo}"}
+        return {"ok": False, "error": explain_bad_path(original)}
 
     tasks = store.list_tasks()
     commits = read_commits(repo, limit=limit)

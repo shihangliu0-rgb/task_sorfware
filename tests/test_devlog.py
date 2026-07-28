@@ -515,3 +515,88 @@ class TestRegressions(unittest.TestCase):
         self.assertEqual(gitlink._pick_branch("tag: v1.0", "fallback"), "fallback")
         self.assertEqual(gitlink._pick_branch("", "fallback"), "fallback")
         self.assertEqual(gitlink._pick_branch("origin/main", "fallback"), "fallback")
+
+    @unittest.skipUnless(gitlink.git_available(), "系统无 git")
+    def test_repo_path_forgiving(self):
+        """用户填 .git / 子目录 / 带引号，都应能自动纠正到仓库根目录。"""
+        repo = tempfile.mkdtemp(prefix="devlog-path-")
+        env = {**os.environ, "GIT_AUTHOR_NAME": "T", "GIT_AUTHOR_EMAIL": "t@e.com",
+               "GIT_COMMITTER_NAME": "T", "GIT_COMMITTER_EMAIL": "t@e.com"}
+        subprocess.run(["git", "init", "-q", repo], check=True, env=env)
+        Path(repo, "a.txt").write_text("a\n")
+        subprocess.run(["git", "-C", repo, "add", "."], check=True, env=env)
+        subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "init"], check=True, env=env)
+        sub = Path(repo, "src", "deep")
+        sub.mkdir(parents=True)
+        Path(sub, "f.py").write_text("x\n")
+
+        root = str(Path(repo).resolve())
+        cases = [
+            repo,                          # 正确
+            str(Path(repo, ".git")),       # 多填一层 .git ← 最常见
+            str(Path(repo, ".git")) + os.sep,
+            str(sub),                      # 子目录
+            str(Path(sub, "f.py")),        # 文件
+            f'"{repo}"',                   # 带引号
+            f"  {repo}  ",                 # 带空格
+        ]
+        for raw in cases:
+            with self.subTest(path=raw):
+                self.assertEqual(Path(gitlink.normalize_repo_path(raw)).resolve(),
+                                 Path(root), f"未能纠正：{raw!r}")
+                self.assertTrue(gitlink.is_repo(raw), f"应识别为仓库：{raw!r}")
+
+    def test_bad_path_message_is_actionable(self):
+        """报错要能让人知道下一步怎么做。"""
+        self.assertIn("请先填写", gitlink.explain_bad_path(""))
+        self.assertIn("不存在", gitlink.explain_bad_path("/nope/xyz/abc"))
+        msg = gitlink.explain_bad_path(tempfile.mkdtemp())
+        self.assertIn(".git", msg, "应说明要找含 .git 的目录")
+
+    @unittest.skipUnless(gitlink.git_available(), "系统无 git")
+    def test_sync_accepts_dotgit_path(self):
+        """端到端：填 .git 路径也能同步成功，并存回归一化后的路径。"""
+        db = Store(":memory:")
+        repo = tempfile.mkdtemp(prefix="devlog-sync-")
+        env = {**os.environ, "GIT_AUTHOR_NAME": "T", "GIT_AUTHOR_EMAIL": "t@e.com",
+               "GIT_COMMITTER_NAME": "T", "GIT_COMMITTER_EMAIL": "t@e.com"}
+        subprocess.run(["git", "init", "-q", repo], check=True, env=env)
+        Path(repo, "a.txt").write_text("a\n")
+        subprocess.run(["git", "-C", repo, "add", "."], check=True, env=env)
+        subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "init"], check=True, env=env)
+
+        res = gitlink.sync(db, str(Path(repo, ".git")))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["total"], 1)
+        self.assertEqual(Path(db.get_setting("git_repo")).resolve(), Path(repo).resolve(),
+                         "存进设置的应是纠正后的根目录")
+        db.close()
+
+
+class TestDataIsolation(unittest.TestCase):
+    """数据必须存在用户主目录，绝不能混进 git 仓库。"""
+
+    def test_data_lives_outside_repo(self):
+        from devlog.db import data_home
+        repo_root = Path(__file__).resolve().parent.parent
+        self.assertFalse(
+            str(data_home()).startswith(str(repo_root)),
+            "数据目录不能在仓库内，否则会被 git 提交上去")
+
+    def test_gitignore_excludes_data(self):
+        gi = (Path(__file__).resolve().parent.parent / ".gitignore").read_text()
+        for pat in ["*.db", "*.db-wal", "*.db-shm"]:
+            self.assertIn(pat, gi, f".gitignore 必须排除 {pat}")
+
+    def test_repo_has_no_committed_data(self):
+        """仓库里不应存在任何已提交的数据库或附件。"""
+        root = Path(__file__).resolve().parent.parent
+        try:
+            out = subprocess.run(["git", "-C", str(root), "ls-files"],
+                                 capture_output=True, text=True, timeout=15)
+        except Exception:
+            self.skipTest("git 不可用")
+        tracked = out.stdout.splitlines()
+        bad = [f for f in tracked
+               if f.endswith((".db", ".db-wal", ".db-shm")) or "attachments/" in f]
+        self.assertEqual(bad, [], f"这些数据文件不该被提交：{bad}")

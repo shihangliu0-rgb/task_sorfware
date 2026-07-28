@@ -188,6 +188,10 @@
             <input type="text" id="git-repo" placeholder="例如 D:\projects\myapp 或 /Users/你/code/myapp" style="flex:1;min-width:240px">
             <button class="btn primary" id="git-sync">同步提交</button>
           </div>
+          <p style="font-size:11px;color:var(--dim);margin-top:6px">
+            填到 <code>.git</code> 或子目录也没关系，会自动纠正到项目根目录。
+            <b style="color:var(--green)">只读取，绝不会修改你的仓库。</b>
+          </p>
           <div id="git-status" style="margin-top:10px"></div>
           <div class="hint" style="margin-top:10px">
             <b>三种自动认领方式</b>（满足任意一种即可）：<br>
@@ -269,11 +273,23 @@
           <button class="btn primary" id="set-save">保存设置</button>
         </div>
         <div class="card">
-          <h3>💾 数据</h3>
-          <p style="font-size:12px;color:var(--muted)">
-            所有数据保存在本机 <code id="data-path">~/.devlog</code>，包含 SQLite 数据库与图片附件。
-            直接备份这个目录即可迁移。
+          <h3>💾 我的数据存在哪</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:10px">
+            所有任务、问题、日志、截图都保存在你自己电脑的这个目录里：
           </p>
+          <div style="font-family:var(--mono);font-size:12px;background:var(--bg);
+                      border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+                      color:var(--text);user-select:text">
+            <span id="data-path">~/.devlog/</span><br>
+            <span style="color:var(--dim)">├── devlog.db　　　 任务、问题、日志、时间线</span><br>
+            <span style="color:var(--dim)">└── attachments/　　图片附件原文件</span>
+          </div>
+          <div class="hint" style="margin-top:12px">
+            <b>数据不在代码仓库里，也不会被 git 提交。</b><br>
+            所以重新 clone 仓库时，本机数据会照常保留；
+            <code>git push</code> 也<b>不会</b>把你的工作记录传到 GitHub 上。<br>
+            <span style="color:var(--dim)">换电脑想带走数据：直接复制上面这个文件夹即可。</span>
+          </div>
         </div>
       </section>
     </div>

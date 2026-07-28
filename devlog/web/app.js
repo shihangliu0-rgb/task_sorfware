@@ -72,6 +72,7 @@ async function boot() {
     $('#set-base').value = d.settings.ai_base_url || '';
     $('#set-model').value = d.settings.ai_model || '';
     if (d.settings.has_key) $('#set-key').placeholder = '已保存（留空则不修改）';
+    if (d.settings.data_home) $('#data-path').textContent = d.settings.data_home;
     const st = await api('/api/stats');
     S.stats = st.stats;
     renderAll();
