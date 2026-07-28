@@ -1,0 +1,19 @@
+[project]
+name = "devlog"
+version = "1.0.0"
+description = "本地开发工作日志：任务、问题、快捷键、时间线、日志分析与 AI 总结"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+devlog = "devlog.launcher:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["devlog"]
+
+[tool.setuptools.package-data]
+devlog = ["web/*"]

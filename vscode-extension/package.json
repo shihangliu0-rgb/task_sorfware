@@ -1,0 +1,42 @@
+{
+  "name": "devlog-companion",
+  "displayName": "DevLog 开发日志",
+  "description": "在 VSCode 里直接记任务、存报错、写笔记，数据同步到本地 DevLog 桌面应用",
+  "version": "1.0.0",
+  "publisher": "devlog",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "devlog.newTask", "title": "DevLog: 新建任务" },
+      { "command": "devlog.saveSelectionAsIssue", "title": "DevLog: 把选中内容存为问题" },
+      { "command": "devlog.analyzeSelection", "title": "DevLog: 分析选中的日志" },
+      { "command": "devlog.quickNote", "title": "DevLog: 快速记一笔" },
+      { "command": "devlog.openApp", "title": "DevLog: 打开日志面板" },
+      { "command": "devlog.syncGit", "title": "DevLog: 同步当前仓库提交" },
+      { "command": "devlog.showTasks", "title": "DevLog: 查看未完成任务" }
+    ],
+    "menus": {
+      "editor/context": [
+        { "command": "devlog.saveSelectionAsIssue", "when": "editorHasSelection", "group": "devlog@1" },
+        { "command": "devlog.analyzeSelection", "when": "editorHasSelection", "group": "devlog@2" }
+      ]
+    },
+    "keybindings": [
+      { "command": "devlog.quickNote", "key": "ctrl+alt+n", "mac": "cmd+alt+n" },
+      { "command": "devlog.saveSelectionAsIssue", "key": "ctrl+alt+i", "mac": "cmd+alt+i", "when": "editorHasSelection" }
+    ],
+    "configuration": {
+      "title": "DevLog",
+      "properties": {
+        "devlog.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8765",
+          "description": "DevLog 本地服务地址"
+        }
+      }
+    }
+  }
+}
